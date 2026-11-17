@@ -1,0 +1,20 @@
+# build output
+bin/
+*.o
+
+# Slurm job logs (CSV results ARE committed)
+results/slurm-*.out
+
+# LaTeX build artefacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.bbl
+report/*.blg
+report/*.pdf
+
+# tooling
+__pycache__/
+.venv/
+.DS_Store
+.vscode/
