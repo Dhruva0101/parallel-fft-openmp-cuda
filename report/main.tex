@@ -1,0 +1,12 @@
+% main.tex: report skeleton; sections live in separate files.
+\documentclass[sigconf,nonacm]{acmart}
+\title{Accelerating 1D and 2D Fast Fourier Transforms Using OpenMP and CUDA}
+\author{Dhruva Kamble}\affiliation{\institution{North Carolina State University}\city{Raleigh}\state{NC}\country{USA}}
+\author{Om Kumar Singh}\affiliation{\institution{North Carolina State University}\city{Raleigh}\state{NC}\country{USA}}
+\begin{document}
+\maketitle
+\input{sec_dhruva}   % Introduction, Background, 1D CPU, 2D GPU
+\input{sec_om}       % Machine setup, 2D CPU, 1D GPU
+\input{sec_joint}    % Results, Discussion, Conclusion (written together at the end)
+\bibliographystyle{ACM-Reference-Format}
+\end{document}
