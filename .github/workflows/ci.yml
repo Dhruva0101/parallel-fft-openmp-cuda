@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  cpu:
+    name: CPU build + correctness
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make cpu
+      - name: Correctness checks
+        run: ./scripts/check.sh
+
+  cuda-compile:
+    name: CUDA compile only (no GPU on CI runners)
+    runs-on: ubuntu-24.04
+    container: nvidia/cuda:12.4.1-devel-ubuntu22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install make
+        run: apt-get update && apt-get install -y --no-install-recommends make
+      - name: Build CUDA binaries
+        run: make gpu CUDA_ARCH=sm_80
