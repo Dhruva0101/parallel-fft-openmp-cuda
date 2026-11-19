@@ -29,7 +29,10 @@ export OMP_PROC_BIND=close OMP_PLACES=cores
 make cpu
 ./scripts/check.sh cpu1d cpu2d
 
-out=results/scaling.csv
+# Write to a per-job file and rename at the end, so two jobs submitted by
+# accident can never interleave rows in the same CSV.
+final=results/scaling.csv
+out=results/scaling.${SLURM_JOB_ID:-local}.partial.csv
 ./bin/cpu1d --header > "$out"
 for n in $SIZES_1D; do
     echo ">> cpu1d seq size=$n"
@@ -47,4 +50,5 @@ for n in $SIZES_2D; do
         OMP_NUM_THREADS=$t ./bin/cpu2d --impl omp --size "$n" --reps "$REPS" >> "$out"
     done
 done
-echo "wrote $out"
+mv "$out" "$final"
+echo "wrote $final"
