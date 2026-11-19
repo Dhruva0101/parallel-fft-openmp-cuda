@@ -7,7 +7,6 @@
 # Only some binaries:   TARGETS=cuda2d sbatch scripts/slurm/bench_gpu.slurm
 #SBATCH --job-name=fft-gpu
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:1
 #SBATCH --time=01:00:00
 #SBATCH --output=results/slurm-gpu-%j.out
 #SBATCH --partition=rtx4060ti16g
