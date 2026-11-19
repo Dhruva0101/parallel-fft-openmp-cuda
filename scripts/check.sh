@@ -3,6 +3,9 @@
 # Small sizes are checked against the naive DFT AND by round trip;
 # large sizes by round trip only (see docs/DESIGN.md, D10).
 # Exit code != 0 if anything fails, so CI goes red.
+#
+#   ./scripts/check.sh                 # every built binary
+#   ./scripts/check.sh cpu1d cuda2d    # only these
 set -u
 cd "$(dirname "$0")/.."
 
@@ -18,10 +21,12 @@ run() {   # run <binary> <sizes...>
     done
 }
 
-run cpu1d  $SIZES_1D
-run cuda1d $SIZES_1D
-run cpu2d  $SIZES_2D
-run cuda2d $SIZES_2D
+targets=("$@")
+[[ ${#targets[@]} -eq 0 ]] && targets=(cpu1d cuda1d cpu2d cuda2d)
+
+for bin in "${targets[@]}"; do
+    case $bin in *1d) run "$bin" $SIZES_1D ;; *) run "$bin" $SIZES_2D ;; esac
+done
 
 if (( fail )); then echo; echo "SOME CHECKS FAILED"; exit 1; fi
 echo; echo "ALL CHECKS PASSED"
