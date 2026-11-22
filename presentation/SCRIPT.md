@@ -12,12 +12,12 @@ Suggested split: each person explains what they wrote.
 
 ## WHY (0:00 – 0:30)
 
-**Title.** "We're Dhruva and Om. We built six parallel versions of the Fast
-Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
+**Title.** "We're Dhruva and Om. We built six parallel versions of the
+Cooley–Tukey Fast Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
 **[click]**
 
 **Why the FFT.** "The FFT is used everywhere, from audio to MRI to deep
-learning. It's also a good test for parallel hardware: it has two kinds of
+learning. Cooley–Tukey cuts the work from N squared to N log N. It's also a good test for parallel hardware: it has two kinds of
 parallelism, it's limited by memory rather than math, and every answer can
 be checked exactly." **[click]**
 
@@ -36,7 +36,7 @@ same sizes, so all six line up." **[click]**
 ## 1D (0:45 – 1:45)
 
 **1D methods** *(3 clicks, one per column)*.
-Sequential: "One long FFT. The basic step is a butterfly. We reorder by
+Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic step is a butterfly. We reorder by
 bit-reversed index, then run log-N stages one after another: the baseline."
 **[click]**
 OpenMP: "Inside a stage, butterflies are independent, so we split them evenly

@@ -303,7 +303,7 @@ class FFTTalk(Slide):
     # ------------------------------------------------------------------ WHY
     def title_slide(self):
         q = T("Parallel FFT: OpenMP vs CUDA", 60, weight=BOLD)
-        sub = T("Six implementations of the Fast Fourier Transform, on the CPU and the GPU", 32)
+        sub = T("Six implementations of the radix-2 Cooley–Tukey FFT, on the CPU and the GPU", 32)
         who = T("Dhruva Kamble · Om Kumar Singh", 28, MUTED)
         course = T("CSC 548 Parallel Systems · NC State · Fall 2026", 24, MUTED)
         VGroup(q, sub, who, course).arrange(DOWN, buff=0.35)
@@ -319,7 +319,7 @@ class FFTTalk(Slide):
         h = header("Why the FFT?", "WHY")
         self.play(FadeIn(h))
         uses = M(f'Used everywhere: audio · images · MRI · wireless · deep learning.   '
-                 f'N² work → <span foreground="{RED}">N log₂N</span>', 30).shift(UP * 2.0)
+                 f'Cooley–Tukey: N² work → <span foreground="{RED}">N log₂N</span>', 30).shift(UP * 2.0)
         fit(uses, 12.8)
         lead = T("And a good test for parallel hardware:", 30, weight=BOLD).next_to(uses, DOWN, buff=0.6)
 
@@ -382,9 +382,9 @@ class FFTTalk(Slide):
         # Sequential: every stage in turn, one core
         x = self.COLS[0]
         bf = Butterfly(8, x - L, x + L, TOP, GAP, color=SEQ, width=2.5)
-        txt = self.method_text(x, [("Reorder by bit-reversed index,", FG),
-                                   ("then log₂N stages of butterflies,", FG),
-                                   ("one after another on 1 core", FG),
+        txt = self.method_text(x, [("Iterative radix-2 Cooley–Tukey:", FG),
+                                   ("bit-reverse, then log₂N stages", FG),
+                                   ("of butterflies, one at a time on 1 core", FG),
                                    ("→ the 1D baseline", MUTED)])
         self.play(FadeIn(titles[0]), FadeIn(bf.dots))
         for s in (1, 2, 3):
