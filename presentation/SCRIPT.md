@@ -16,7 +16,7 @@ Suggested split: each person explains what they wrote.
 Cooley–Tukey Fast Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
 **[click]**
 
-**Why the FFT.** "The FFT is used everywhere, from audio to MRI to deep
+**Why the FFT.** "An FFT turns a signal into its frequency components. It's used everywhere, from audio to MRI to deep
 learning. Cooley–Tukey cuts the work from N squared to N log N. It's also a good test for parallel hardware: it has two kinds of
 parallelism, it's limited by memory rather than math, and every answer can
 be checked exactly." **[click]**

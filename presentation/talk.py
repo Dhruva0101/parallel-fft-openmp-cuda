@@ -319,8 +319,10 @@ class FFTTalk(Slide):
         h = header("Why the FFT?", "WHY")
         self.play(FadeIn(h))
         uses = M(f'Used everywhere: audio · images · MRI · wireless · deep learning.   '
-                 f'Cooley–Tukey: N² work → <span foreground="{RED}">N log₂N</span>', 30).shift(UP * 2.0)
+                 f'Cooley–Tukey: N² work → <span foreground="{RED}">N log₂N</span>', 30)
         fit(uses, 12.8)
+        what = T("An FFT turns a signal into its frequency components.", 32, weight=BOLD)
+        VGroup(what, uses).arrange(DOWN, buff=0.3).move_to(UP * 2.0)
         lead = T("And a good test for parallel hardware:", 30, weight=BOLD).next_to(uses, DOWN, buff=0.6)
 
         def reason(title, body):
@@ -337,11 +339,11 @@ class FFTTalk(Slide):
             reason("Limited by memory", "little math per value:\ndata movement sets speed"),
             reason("Known right answer", "every version can be\nchecked exactly"),
         ).arrange(RIGHT, buff=0.3).next_to(lead, DOWN, buff=0.45)
-        self.play(FadeIn(uses))
+        self.play(FadeIn(what), FadeIn(uses))
         self.play(FadeIn(lead), LaggedStart(*[FadeIn(r, shift=UP * 0.2) for r in reasons], lag_ratio=0.2))
         self.next_slide()
 
-        self.play(FadeOut(uses), FadeOut(lead), FadeOut(reasons), run_time=0.4)
+        self.play(FadeOut(what), FadeOut(uses), FadeOut(lead), FadeOut(reasons), run_time=0.4)
         box_q = fit(T("When does CPU or GPU parallelism pay off for the FFT?", 34, weight=BOLD), 12.2)
         box = SurroundingRectangle(box_q, color=RED, buff=0.3, corner_radius=0.1)
         rq = VGroup(box, box_q).shift(UP * 1.2)
