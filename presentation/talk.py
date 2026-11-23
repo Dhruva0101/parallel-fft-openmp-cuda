@@ -337,7 +337,7 @@ class FFTTalk(Slide):
         reasons = VGroup(
             reason("Two kinds of parallelism", "inside one long FFT (1D)\nvs. across many rows (2D)"),
             reason("Limited by memory", "little math per value:\ndata movement sets speed"),
-            reason("Known right answer", "every version can be\nchecked exactly"),
+            reason("Known right answer", "small cases checked vs DFT;\nlarge via round trip"),
         ).arrange(RIGHT, buff=0.3).next_to(lead, DOWN, buff=0.45)
         self.play(FadeIn(what), FadeIn(uses))
         self.play(FadeIn(lead), LaggedStart(*[FadeIn(r, shift=UP * 0.2) for r in reasons], lag_ratio=0.2))
@@ -519,9 +519,9 @@ class FFTTalk(Slide):
             return VGroup(box, content)
 
         cards = VGroup(
-            card("Same for all six", ["same random input", "same compiler flags",
-                                      "same timer, 5 timed runs"], ACC),
-            card("Checked correct", ["vs. an exact DFT", "and IFFT(FFT(x)) = x,",
+            card("Same for all six", ["same seeded input", "platform-specific compilers",
+                                      "same timing interface, 5 runs"], ACC),
+            card("Checked correct", ["vs. naive DFT (small sizes)", "and IFFT(FFT(x)) = x,",
                                      "up to 16.8 M values"], GOOD),
             card("Real hardware", ["NCSU ARC cluster", "CPU: 16-core AMD EPYC",
                                    "GPU: NVIDIA RTX 4060 Ti"], RED),
@@ -529,14 +529,22 @@ class FFTTalk(Slide):
         self.play(LaggedStart(*[FadeIn(c, shift=UP * 0.3) for c in cards], lag_ratio=0.2))
         self.next_slide()
 
-        title = T("How to read the charts", 30, weight=BOLD).next_to(cards, DOWN, buff=0.55).align_to(cards, LEFT)
+        title = T("How to read the charts", 30, weight=BOLD).next_to(
+            cards, DOWN, buff=0.45
+        ).align_to(cards, LEFT)
         items = VGroup(
-            M('<b>Speedup</b> = sequential time ÷ parallel time.  Above 1× means faster.', 26),
-            M('<b>Two GPU numbers</b>: compute only, and including copies to and from the GPU.', 26),
-            M('<b>Same sizes for 1D and 2D</b>: 2¹⁰ to 2²⁴ values (2D uses n × n), so all six line up.', 26),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.22).next_to(title, DOWN, buff=0.3, aligned_edge=LEFT)
+            M('<b>Speedup</b> = sequential time ÷ parallel time. Above 1× means faster.', 26),
+            M('<b>16 OpenMP threads</b> match 16 physical CPU cores (no SMT needed).', 26),
+            M('<b>Fixed threads</b> isolate input-size effects; scaling tests use 1, 2, 4, 8, 16.', 26),
+            M('<b>GPU timings</b>: kernel-only versus end-to-end (transfers + overhead).', 26),
+            M('<b>Matched input sizes</b>: 2¹⁰ to 2²⁴ values for both 1D and 2D.', 26),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.14).next_to(
+            title, DOWN, buff=0.22, aligned_edge=LEFT
+        )
         fit(items, 12.8)
-        self.play(FadeIn(title), LaggedStart(*[FadeIn(i, shift=RIGHT * 0.2) for i in items], lag_ratio=0.2))
+        self.play(FadeIn(title), LaggedStart(
+            *[FadeIn(i, shift=RIGHT * 0.2) for i in items], lag_ratio=0.15
+        ))
         self.next_slide()
 
     # ------------------------------------------------------------------ WHAT
@@ -583,7 +591,7 @@ class FFTTalk(Slide):
             ("CUDA 1D, compute only", S1["cudak"], GPU, True),
             ("CUDA 1D, incl. copies", S1["cuda"], GPU, False),
         ], 1)
-        self.play(FadeIn(hline(ax, ymap, 16, OMP, "16 cores", opacity=0.7, left=True)))
+        self.play(FadeIn(hline(ax, ymap, 16, OMP, "ideal 16×", opacity=0.7, left=True)))
         self.next_slide()
 
         sp = speedups(S1["seq"], S1["omp"])
@@ -602,22 +610,22 @@ class FFTTalk(Slide):
         ce, ck = speedups(S1["seq"], S1["cuda"]), speedups(S1["seq"], S1["cudak"])
         if ce:
             top = max(ce)
-            a3 = self.note([(f"GPU at {pow2(int(np.log2(top)))}: {ce[top]:.0f}× incl. copies,", GPU),
+            a3 = self.note([(f"GPU at {pow2(int(np.log2(top)))}: {ce[top]:.1f}× end-to-end,", GPU),
                             (f"{ck[top]:.0f}× compute only", GPU),
-                            ("dip at 2²²: 32 MB outgrows L2", FG)], a2)
+                            ("kernel-only excludes transfer and host overhead", FG)], a2)
             self.play(FadeIn(a3))
             self.next_slide()
 
     def compare2d_slide(self):
         self.clear_all()
-        h = header("2D compared · Q2: when does the GPU win?", "2D", color=GPU)
+        h = header("2D compared · Q2: GPU vs CPU performance", "2D", color=GPU)
         self.play(FadeIn(h))
         ax, ymap, lines, legend = self.speedup_chart(S2["seq"], [
             ("OpenMP 2D", S2["omp"], OMP, False),
             ("CUDA 2D, compute only", S2["cudak"], GPU, True),
             ("CUDA 2D, incl. copies", S2["cuda"], GPU, False),
         ], 2)
-        self.play(FadeIn(hline(ax, ymap, 16, OMP, "16 cores", opacity=0.7, left=True)))
+        self.play(FadeIn(hline(ax, ymap, 16, OMP, "ideal 16×", opacity=0.7, left=True)))
         self.next_slide()
 
         so, ce, ck = (speedups(S2["seq"], S2[k]) for k in ("omp", "cuda", "cudak"))
@@ -626,7 +634,7 @@ class FFTTalk(Slide):
             b1 = self.note([(f"OpenMP 2D: {so[lo]:.1f}× already at 1K values", OMP),
                             (f"up to {max(so.values()):.0f}×: whole rows, 1 barrier", FG)], legend, 0.45)
             win = min(e for e, v in ce.items() if v > 1)
-            b2 = self.note([(f"GPU wins from {pow2(int(np.log2(win)))} values", GPU),
+            b2 = self.note([(f"GPU beats serial from {pow2(int(np.log2(win)))} values", GPU),
                             (f"at {pow2(int(np.log2(top)))}: {ce[top]:.0f}× incl. copies,", FG),
                             (f"{ck[top]:.0f}× compute only", FG)], b1)
             self.play(FadeIn(b1))
@@ -635,7 +643,7 @@ class FFTTalk(Slide):
 
         # where does the GPU time go?
         self.play(*[FadeOut(m) for m in self.mobjects if m is not h], run_time=0.4)
-        sub = T("Why the gap between the two GPU lines: copies", 30, weight=BOLD).next_to(h, DOWN, buff=0.35).to_edge(LEFT, buff=0.6)
+        sub = T("GPU time: kernels versus transfers and overhead", 30, weight=BOLD).next_to(h, DOWN, buff=0.35).to_edge(LEFT, buff=0.6)
         W = 7.6
         rows = VGroup()
         for n in (256, 1024, 4096):
@@ -644,7 +652,7 @@ class FFTTalk(Slide):
             k = Rectangle(width=W * kf, height=0.7, fill_color=GPU, fill_opacity=1, stroke_width=0)
             c = Rectangle(width=W * (1 - kf), height=0.7, fill_color=DIM, fill_opacity=1, stroke_width=0)
             bar = VGroup(k, c).arrange(RIGHT, buff=0)
-            rows.add(VGroup(T(f"{n} × {n}", 26), bar, T(f"copying {100 * (1 - kf):.0f}%", 26),
+            rows.add(VGroup(T(f"{n} × {n}", 26), bar, T(f"non-kernel {100 * (1 - kf):.0f}%", 26),
                             T(f"{total:.2f} ms", 26, MUTED)))
         for i, r in enumerate(rows):
             r[1].move_to(UP * (0.9 - 0.95 * i) + RIGHT * 0.4)
@@ -660,9 +668,9 @@ class FFTTalk(Slide):
             self.play(GrowFromEdge(r[1], LEFT), FadeIn(r[0]), FadeIn(r[2]), FadeIn(r[3]), run_time=0.5)
         t, k = CUDA2D[("cuda", 4096)]
         msg = VGroup(
-            M(f'16.8 M values: the FFT takes <span foreground="{GPU}">{k:.0f} ms</span>, '
-              f'moving the data takes <span foreground="{MUTED}">{t - k:.0f} ms</span>', 28),
-            M('<b>The GPU wins big only if the data already lives on the GPU.</b>', 30),
+            M(f'16.8 M values: GPU kernels take <span foreground="{GPU}">{k:.0f} ms</span>, '
+              f'non-kernel operations take <span foreground="{MUTED}">{t - k:.0f} ms</span>', 28),
+            M('<b>Transfers and host overhead matter in end-to-end timing.</b>', 30),
         ).arrange(DOWN, buff=0.25).to_edge(DOWN, buff=0.55)
         self.next_slide()
         self.play(FadeIn(msg, shift=UP * 0.2))
@@ -704,14 +712,15 @@ class FFTTalk(Slide):
                 self.play(Create(line), FadeIn(dots), FadeIn(lbl), run_time=0.6)
         self.next_slide()
 
-        best2 = max(v for d, e, v in ends if d == 2)
-        r1 = [v for d, e, v in ends if d == 1]
+        largest = max(e for d, e, v in ends)
+        best2 = next(v for d, e, v in ends if d == 2 and e == largest)
+        largest1 = next(v for d, e, v in ends if d == 1 and e == largest)
         notes = VGroup(
-            T(f"2D: {best2:.1f}× on 16 cores", 26, "#2E3F86", weight=BOLD),
+            T(f"2D: {best2:.2f}× on 16 cores", 26, "#2E3F86", weight=BOLD),
             T(f"{100 * best2 / 16:.0f}% of ideal", 24),
             T("1 barrier: more cores,", 24),
             T("more rows at once", 24),
-            T(f"1D: only {min(r1):.0f}–{max(r1):.0f}×", 26, RED, weight=BOLD),
+            T(f"1D: {largest1:.2f}× at same size", 26, RED, weight=BOLD),
             T("log₂N barriers,", 24),
             T("worst when small", 24),
         ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
@@ -743,7 +752,7 @@ class FFTTalk(Slide):
                         ).arrange(DOWN, aligned_edge=LEFT, buff=0.14)
         key = VGroup(T("solid = 1D, dashed = 2D", 22, MUTED),
                      T("GPU times include copies", 22, MUTED),
-                     T("same values = same arithmetic", 22, MUTED)).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
+                     T("same element count; different data layout", 22, MUTED)).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
         right_col(VGroup(legend, key).arrange(DOWN, aligned_edge=LEFT, buff=0.25), top=2.4, left=2.0, width=4.6)
         self.play(Create(ax), FadeIn(deco), FadeIn(legend), FadeIn(key))
         for l, d, c, dsh in entries:
@@ -754,11 +763,11 @@ class FFTTalk(Slide):
 
         o, g = self.shape_ratios()
         if o and g:
-            f = self.note([("Yes: 2D beats 1D once parallel", ACC),
-                           (f"OpenMP 2D: {min(o):.1f}–{max(o):.1f}× faster than 1D", FG),
-                           ("  (1 barrier instead of log₂N)", MUTED),
-                           (f"GPU compute: 2D up to {max(g):.0f}× faster", FG),
-                           ("  (rows stay in shared memory)", MUTED)], key, 0.35)
+            f = self.note([("Shape changes the parallel performance", ACC),
+                           (f"At 16.8M, OpenMP 2D is {S1['omp'][max(S1['omp'])] / S2['omp'][max(S2['omp'])]:.2f}× faster", FG),
+                           ("  (independent row/column FFTs)", MUTED),
+                           (f"At 16.8M, CUDA 2D kernel is {S1['cudak'][max(S1['cudak'])] / S2['cudak'][max(S2['cudak'])]:.1f}× faster", FG),
+                           ("  (short rows exploit shared memory)", MUTED)], key, 0.35)
             self.play(FadeIn(f))
         self.next_slide()
 
@@ -770,15 +779,16 @@ class FFTTalk(Slide):
         best = max(sp.values()) if sp else 0
         ce = speedups(S2["seq"], S2["cuda"])
         o, g = self.shape_ratios()
-        q1 = f'Pays off above ~4K values; up to {best:.0f}× on 16 cores'
+        q1 = f'At 16.8M: OpenMP 1D {sp[max(sp)]:.2f}× vs sequential'
         if SCALE:
-            s2 = max(SCALE[(2, e, 1)] / SCALE[(2, e, 16)] for (d, e, t) in SCALE if d == 2 and t == 16)
-            s1 = max(SCALE[(1, e, 1)] / SCALE[(1, e, 16)] for (d, e, t) in SCALE if d == 1 and t == 16)
-            q1 = f'2D scales almost perfectly ({s2:.1f}× on 16 cores); 1D only up to {s1:.0f}×'
-        q2 = (f'Wins from a few thousand values, up to {max(ce.values()):.0f}× incl. copies; '
-              f'copies are most of its time') if ce else 'Compute is fast, but copies dominate'
-        q3 = (f'2D beats 1D in parallel: OpenMP {min(o):.1f}–{max(o):.1f}×, '
-              f'GPU compute up to {max(g):.0f}×') if o and g else '[ 1D vs. 2D result ]'
+            e = max(k[1] for k in SCALE)
+            s2 = SCALE[(2, e, 1)] / SCALE[(2, e, 16)]
+            s1 = SCALE[(1, e, 1)] / SCALE[(1, e, 16)]
+            q1 = f'At 16.8M: 1D {s1:.2f}×, 2D {s2:.2f}× scaling (1 to 16 threads)'
+        q2 = (f'At 16.8M: CUDA 2D {ce[max(ce)]:.2f}× end-to-end vs sequential; '
+              f'transfers and overhead matter') if ce else 'CUDA results unavailable'
+        q3 = (f"At 16.8M: OpenMP 2D {S1['omp'][max(S1['omp'])] / S2['omp'][max(S2['omp'])]:.2f}× "
+              f"faster than OpenMP 1D") if o else "Shape comparison unavailable"
         items = VGroup(
             M(f'<span foreground="{OMP}"><b>Q1 CPU</b></span>   {q1}', 30),
             M(f'<span foreground="{GPU}"><b>Q2 GPU</b></span>   {q2}', 30),

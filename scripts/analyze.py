@@ -43,7 +43,9 @@ INK, MUTED, GRID = "#1f1f1e", "#6b6a65", "#e4e3df"
 
 
 def load() -> pd.DataFrame:
-    frames = [pd.read_csv(p) for p in sorted(RESULTS.glob("*.csv"))]
+    frames = [pd.read_csv(RESULTS / f"{name}.csv")
+          for name in ("cpu1d", "cpu2d", "cuda1d", "cuda2d")
+          if (RESULTS / f"{name}.csv").exists()]
     if not frames:
         sys.exit("no results/*.csv yet - run `make bench` first")
     df = pd.concat(frames, ignore_index=True)
