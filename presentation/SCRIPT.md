@@ -3,11 +3,11 @@
 25 clicks. **[click]** = advance. About 600 words: this is tight, so speak
 while the animations play and don't wait for them to finish.
 
-Suggested split: each person explains what they wrote.
-**Dhruva**: Why, Method, Sequential/OpenMP 1D, 1D compared, CUDA 2D, 2D compared.
-**Om**: CUDA 1D, Sequential/OpenMP 2D, all six / Q3. Either: wrap-up.
+Speaker split:
+**Dhruva** (0:00 – 1:45, clicks 1–12): Title, Why, Questions, Method, all of 1D.
+**Om** (1:45 – 4:00, clicks 13 to the end): all of 2D, scaling, all six, wrap-up and Q&A lead.
 
-## WHY (0:00 – 0:30)
+## WHY (0:00 – 0:30) · Dhruva
 
 **Title.** "We're Dhruva and Om. We built six parallel versions of the
 Cooley–Tukey Fast Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
@@ -22,7 +22,7 @@ every answer can be checked." **[click]**
 **Questions.** "We ask: how well does the CPU scale with more cores, when does
 the GPU win, and does 1D versus 2D shape matter?" **[click]**
 
-## METHOD (0:30 – 0:45)
+## METHOD (0:30 – 0:45) · Dhruva
 
 **Fair test.** "All six get the same seeded input and the same timer. Small
 sizes are checked against a direct DFT, and every size up to 16.8 million
@@ -34,7 +34,7 @@ OpenMP uses 16 threads, one per core; the scaling test varies that from 1
 to 16. The GPU gets two numbers: kernel only, and end to end with transfers.
 1D and 2D use the same sizes, so all six line up." **[click]**
 
-## 1D (0:45 – 1:45)
+## 1D (0:45 – 1:45) · Dhruva
 
 **1D methods** *(3 clicks, one per column)*.
 Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic
@@ -42,7 +42,7 @@ step is a butterfly. We reorder by bit-reversed index, then run log-N stages
 one after another: the baseline." **[click]**
 OpenMP: "Inside a stage, butterflies are independent, so we split them evenly
 across threads, with a barrier after every stage." **[click]**
-CUDA *(Om)*: "One GPU thread per butterfly. Blocks can only sync internally,
+CUDA: "One GPU thread per butterfly. Blocks can only sync internally,
 so the first 11 stages run fused in shared memory, and every later stage gets
 its own launch, which acts as a grid-wide barrier." **[click]**
 
@@ -50,15 +50,16 @@ its own launch, which acts as a grid-wide barrier." **[click]**
 **[click]** "OpenMP at 1,000 values: 0.34×, slower: threads cost more than
 the work." **[click]** "At 4 million: 8×. Big problems hide the overhead."
 **[click]** "The GPU at 16.8 million: 38× end to end, 72× kernel only. The
-kernel-only number leaves out transfers and host overhead." **[click]**
+kernel-only number leaves out transfers and host overhead. Om will take
+us through 2D." **[click]** *(hand over to Om)*
 
-## 2D (1:45 – 2:55)
+## 2D (1:45 – 2:55) · Om
 
 **2D methods** *(3 clicks, one per column)*.
-Sequential *(Om)*: "Now an n-by-n grid: FFT every row, then every column,
+Sequential: "Now an n-by-n grid: FFT every row, then every column,
 copying each column into a buffer because columns are far apart in memory."
 **[click]**
-OpenMP *(Om)*: "Threads take whole rows, one barrier, then whole columns: one
+OpenMP: "Threads take whole rows, one barrier, then whole columns: one
 barrier in total instead of log-N." **[click]**
 CUDA: "One block per row in shared memory; columns are slow on a GPU, so we
 transpose, reuse the row kernel, and transpose back." **[click]**
@@ -70,7 +71,7 @@ kernel only." **[click]** "The gap is everything outside the kernels: 90 to
 95 percent of GPU time." **[click]** "5 ms in kernels, 42 ms in transfers and
 overhead." **[click]**
 
-## ALL SIX (2:55 – 4:00)
+## ALL SIX (2:55 – 4:00) · Om
 
 **Q1 scaling** *(2:55)*. "Now fix the size and add cores. Each line is
 speedup over the same code on one core; the grey curve is ideal." **[click]**
@@ -79,7 +80,7 @@ barrier more cores just means more rows at once. 1D at the same size only
 reaches 8×, and 3 to 5× at smaller sizes: its log-N barriers cost more as
 cores are added." **[click]**
 
-**All six** *(Om)*. "All six on one chart, lower is faster; same number of
+**All six**. "All six on one chart, lower is faster; same number of
 values, different data layout." **[click]** "Shape matters once you go
 parallel: at 16.8 million, OpenMP 2D is 1.4× faster than 1D, and up to 3× at
 smaller sizes. On the GPU, the 2D kernels are 9.6× faster, because short rows
