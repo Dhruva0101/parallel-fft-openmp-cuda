@@ -1,6 +1,6 @@
 # Talk script: 4:00 + 0:30 Q&A
 
-25 clicks. **[click]** = advance. About 600 words: this is tight, so speak
+25 steps, with 24 advances after the title. **[click]** = advance. Speak
 while the animations play and don't wait for them to finish.
 
 Speaker split:
@@ -9,15 +9,15 @@ Speaker split:
 
 ## WHY (0:00 – 0:30) · Dhruva
 
-**Title.** "We're Dhruva and Om. We built six parallel versions of the
-Cooley–Tukey Fast Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
+**Title.** "We're Dhruva and Om. We built six versions of the Cooley–Tukey
+Fast Fourier Transform: sequential CPU, OpenMP CPU, and CUDA GPU, each in 1D and 2D."
 **[click]**
 
 **Why the FFT.** "An FFT turns a signal into its frequency components. It's
 used everywhere, from audio to MRI to deep learning. Cooley–Tukey cuts the
 work from N squared to N log N. It's also a good test for parallel hardware:
-it has two kinds of parallelism, it's limited by memory rather than math, and
-every answer can be checked." **[click]**
+it has two kinds of parallelism, moving data can be costly, and we can
+check the results." **[click]**
 
 **Questions.** "We ask: how well does the CPU scale with more cores, when does
 the GPU win, and does 1D versus 2D shape matter?" **[click]**
@@ -25,14 +25,14 @@ the GPU win, and does 1D versus 2D shape matter?" **[click]**
 ## METHOD (0:30 – 0:45) · Dhruva
 
 **Fair test.** "All six get the same seeded input and the same timer. Small
-sizes are checked against a direct DFT, and every size up to 16.8 million
-values passes an inverse round trip. We ran on NC State's ARC cluster."
+sizes are checked against a direct DFT. We also use inverse round trips
+to check that we recover the input within tolerance. We ran on NC State's ARC cluster."
 **[click]**
 
 **Reading the charts.** "Speedup is sequential time over parallel time.
 OpenMP uses 16 threads, one per core; the scaling test varies that from 1
 to 16. The GPU gets two numbers: kernel only, and end to end with transfers.
-1D and 2D use the same sizes, so all six line up." **[click]**
+1D and 2D are matched by total number of values." **[click]**
 
 ## 1D (0:45 – 1:45) · Dhruva
 
@@ -41,12 +41,12 @@ Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic
 step is a butterfly. We reorder by bit-reversed index, then run log-N stages
 one after another: the baseline." **[click]**
 OpenMP: "Inside a stage, butterflies are independent, so we split them evenly
-across threads, with a barrier after every stage." **[click]**
-CUDA: "One GPU thread per butterfly. Blocks can only sync internally,
-so the first 11 stages run fused in shared memory, and every later stage gets
-its own launch, which acts as a grid-wide barrier." **[click]**
+across threads. There is a barrier after bit reversal and after every stage." **[click]**
+CUDA: "One kernel reorders the input, then we launch one kernel per stage
+with one GPU thread per butterfly. Each launch finishes across all blocks
+before the next stage starts." **[click]**
 
-**1D compared** *(1:15)*. "Speedup over one core as the problem grows."
+**1D compared** *(1:15)*. "Speedup over sequential 1D as the problem grows."
 **[click]** "OpenMP at 1,000 values: 0.34×, slower: threads cost more than
 the work." **[click]** "At 4 million: 8×. Big problems hide the overhead."
 **[click]** "The GPU at 16.8 million: 38× end to end, 72× kernel only. The
@@ -59,12 +59,12 @@ us through 2D." **[click]** *(hand over to Om)*
 Sequential: "Now an n-by-n grid: FFT every row, then every column,
 copying each column into a buffer because columns are far apart in memory."
 **[click]**
-OpenMP: "Threads take whole rows, one barrier, then whole columns: one
-barrier in total instead of log-N." **[click]**
+OpenMP: "Threads take whole rows, wait at a barrier, then take whole
+columns. Each thread has its own column buffer." **[click]**
 CUDA: "One block per row in shared memory; columns are slow on a GPU, so we
 transpose, reuse the row kernel, and transpose back." **[click]**
 
-**2D compared** *(2:20)*. "Speedup over one core." **[click]** "OpenMP 2D is
+**2D compared** *(2:20)*. "Speedup over sequential 2D." **[click]** "OpenMP 2D is
 already faster at 1,000 values and reaches 16×. The GPU beats the sequential
 code from 4,000 values, and at 16.8 million reaches 90× end to end, 875×
 kernel only." **[click]** "The gap is everything outside the kernels: 90 to
@@ -75,14 +75,13 @@ overhead." **[click]**
 
 **Q1 scaling** *(2:55)*. "Now fix the size and add cores. Each line is
 speedup over the same code on one core; the grey curve is ideal." **[click]**
-"2D at 16.8 million: 14.1× on 16 cores, 88 percent of ideal, because with one
-barrier more cores just means more rows at once. 1D at the same size only
-reaches 8×, and 3 to 5× at smaller sizes: its log-N barriers cost more as
-cores are added." **[click]**
+"2D at 16.8 million: 14.1× on 16 cores, 88 percent of ideal. Threads can
+finish whole rows before they need to meet. 1D reaches 8× at the same size,
+and 3 to 5× at smaller sizes. It has a barrier after each stage." **[click]**
 
 **All six**. "All six on one chart, lower is faster; same number of
 values, different data layout." **[click]** "Shape matters once you go
-parallel: at 16.8 million, OpenMP 2D is 1.4× faster than 1D, and up to 3× at
+parallel: at 16.8 million, OpenMP 2D is 1.4× faster than 1D, and up to 3.2× at
 smaller sizes. On the GPU, the 2D kernels are 9.6× faster, because short rows
 stay in shared memory." **[click]**
 
@@ -101,13 +100,13 @@ stays where the compute is." **[click]** "Thank you, questions?"
   are close but not identical.
 - **Why is sequential 2D slower than sequential 1D?** Same number of
   butterflies, but 2D also gathers every column into a buffer and scatters it
-  back: 1.1–1.4× slower at every size.
+  back. Sequential 2D took longer at every measured size.
 - **Why is CUDA 2D compute faster than CUDA 1D?** 2D keeps each row in shared
-  memory for all its stages; 1D's later stages each read and write global
-  memory once.
+  memory for all its stages. Each 1D stage reads and writes the working
+  array in global memory.
 - **Is comparing 1D and 2D fair?** Same number of values = same number of
-  butterflies (N/2 · log₂N); only the data layout and parallel structure
-  differ.
-- **Would pinned memory reduce the transfer time?** Probably, partly: at 16.8 M
-  values we move 268 MB in about 42 ms, roughly 6 GB/s from pageable memory,
-  well below what PCIe 4.0 ×8 allows.
+  butterflies (N/2 · log₂N). The two transforms have different outputs,
+  and their layout and parallel structure affect runtime.
+- **Would pinned memory reduce the transfer time?** It could. The 42 ms
+  includes transfers and other overhead, so we'd time the copies directly
+  and compare pinned and pageable buffers to measure the difference.
