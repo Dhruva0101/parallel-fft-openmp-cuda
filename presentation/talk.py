@@ -755,11 +755,16 @@ class FFTTalk(Slide):
 
         o, g = self.shape_ratios()
         if o and g:
-            f = self.note([("Shape changes the parallel performance", ACC),
-                           (f"At 16.8M, OpenMP 2D is {S1['omp'][max(S1['omp'])] / S2['omp'][max(S2['omp'])]:.2f}× faster", FG),
-                           ("  (independent row/column FFTs)", MUTED),
-                           (f"At 16.8M, CUDA 2D kernel is {S1['cudak'][max(S1['cudak'])] / S2['cudak'][max(S2['cudak'])]:.1f}× faster", FG),
-                           ("  (short rows exploit shared memory)", MUTED)], key, 0.35)
+            largest = 2 ** 24
+            omp_ratio = S1["omp"][largest] / S2["omp"][largest]
+            cuda_ratio = S1["cuda"][largest] / S2["cuda"][largest]
+            f = self.note([
+                ("Shape changes the parallel performance", ACC),
+                (f"At 16.8M, OpenMP 2D is {omp_ratio:.2f}× faster", FG),
+                ("  (independent row/column FFTs)", MUTED),
+                (f"At 16.8M, CUDA 2D is {cuda_ratio:.2f}× faster", FG),
+                ("  (end-to-end, including transfers)", MUTED),
+            ], key, 0.35)
             self.play(FadeIn(f))
         self.next_slide()
 
