@@ -15,6 +15,7 @@ Charts read results/*.csv, so re-render after new benchmark runs.
 """
 import csv
 import os
+import sys
 from collections import defaultdict
 
 from manim import *
@@ -42,6 +43,7 @@ config.background_color = BG
 
 
 def T(s, size=30, color=FG, **kw):
+    kw.setdefault("disable_ligatures", True)   # one glyph per character, so baselines can be found
     return Text(s, font=FONT, font_size=size * FS, color=color, **kw)
 
 
@@ -57,8 +59,48 @@ def red_bar():
 def fit(m, w):
     """Shrink m to width w if it is wider (never enlarges)."""
     if m.width > w:
+        if os.environ.get("FIT_WARN"):
+            print(f"FIT_WARN shrink {w / m.width:.3f}: "
+                  + " | ".join(getattr(t, "text", "") for t in m.get_family() if getattr(t, "text", "")), file=sys.stderr)
         m.scale_to_fit_width(w)
     return m
+
+
+_FLAT = set("ABCDEFHIKLMNOPRSTUVWXZabcdefhiklmnorstuvwxz0123456789")
+
+
+def baseline(m):
+    """y of the text baseline in m: the bottom of glyphs that have no descender."""
+    for t in m.get_family():
+        if isinstance(t, Text) and not isinstance(t, MarkupText):
+            src = getattr(t, "original_text", t.text).replace("\n", "")
+            chars = list(src)
+            if len(chars) != len(t.submobjects):
+                chars = [c for c in src if not c.isspace()]
+            if len(chars) == len(t.submobjects):
+                ys = sorted(g.get_bottom()[1] for c, g in zip(chars, t.submobjects) if c in _FLAT)
+                if ys:
+                    return ys[len(ys) // 2]
+    return m.get_bottom()[1]
+
+
+def pitch(size):
+    """Baseline-to-baseline distance for a line of text at this size."""
+    return 0.0182 * size * FS
+
+
+def stack(mobs, step, gaps=None, center=False):
+    """Lines on evenly spaced baselines (step apart), left-aligned or centred.
+    gaps: {index: extra space above that line}."""
+    y = 0.0
+    for i, m in enumerate(mobs):
+        y -= (gaps or {}).get(i, 0) + (step if i else 0)
+        m.shift(UP * (y - baseline(m)))
+        if center:
+            m.set_x(0)
+        else:
+            m.shift(RIGHT * (0 - m.get_left()[0]))
+    return VGroup(*mobs)
 
 
 def right_col(m, top=2.3, left=0.7, width=6.0):
@@ -168,9 +210,12 @@ def minimap(active):
     return VGroup(lbl, cells)
 
 
+HEAD = 36   # every slide title uses this size; titles are kept short enough not to shrink
+
+
 def header(title, active, impl=None, color=FG):
     c = crumb(active)
-    t = fit(T(title, 40, color, weight=BOLD), 12.6 - c.width).to_corner(UL, buff=0.45)
+    t = fit(T(title, HEAD, color, weight=BOLD), 12.6 - c.width).to_corner(UL, buff=0.45)
     g = VGroup(red_bar(), t, c)
     if impl is not None:
         g.add(minimap(impl).next_to(c, DOWN, buff=0.2).align_to(c, RIGHT))
@@ -314,20 +359,19 @@ class FFTTalk(Slide):
         self.clear_all()
         h = header("Why the FFT?", "WHY")
         self.play(FadeIn(h))
-        uses = M(f'Used everywhere: audio · images · MRI · wireless · deep learning.   '
-                 f'Cooley–Tukey: N² work → <span foreground="{RED}">N log₂N</span>', 30)
-        fit(uses, 12.8)
+        uses = VGroup(T("Used everywhere: audio · images · MRI · wireless · deep learning", 28),
+                     M(f'Cooley–Tukey cuts the work from N² to <span foreground="{RED}">N log₂N</span>', 28)
+                     ).arrange(DOWN, buff=0.15)
         what = T("An FFT turns a signal into its frequency components.", 32, weight=BOLD)
         VGroup(what, uses).arrange(DOWN, buff=0.3).move_to(UP * 2.0)
         lead = T("And a good test for parallel hardware:", 30, weight=BOLD).next_to(uses, DOWN, buff=0.6)
 
         def reason(title, body):
-            t = T(title, 27, RED, weight=BOLD)
-            b = T(body, 25, FG, line_spacing=0.9)
-            g = VGroup(t, b).arrange(DOWN, buff=0.25)
+            g = stack([T(title, 27, RED, weight=BOLD)] + [T(l, 25) for l in body.split("\n")],
+                      pitch(25), gaps={1: 0.12}, center=True)
             box = RoundedRectangle(width=4.1, height=2.3, corner_radius=0.12,
                                    stroke_color=DIM, stroke_width=2)
-            g.move_to(box)
+            g.move_to(box.get_center())   # every box has a title + 2 lines, so all line up
             return VGroup(box, g)
 
         reasons = VGroup(
@@ -355,6 +399,7 @@ class FFTTalk(Slide):
     # ------------------------------------------------------------------ HOW
     COLS = (-4.45, 0.0, 4.45)      # centres of the three method columns
     COLW = 4.0
+    TXT_TOP = -1.15                # top of every method column's text
 
     def method_frame(self, title, dim):
         """Header plus three empty column titles and dividers. Returns titles."""
@@ -368,9 +413,10 @@ class FFTTalk(Slide):
 
     def method_text(self, x, lines):
         """lines: (text, colour) pairs, placed under the column's diagram."""
-        g = VGroup(*[T(s, 23, c) for s, c in lines]).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-        fit(g, self.COLW - 0.2)
-        return g.move_to([x, -1.95, 0]).align_to(np.array([x - (self.COLW - 0.2) / 2, 0, 0]), LEFT)
+        g = stack([T(s, 23, c) for s, c in lines], pitch(23))
+        assert g.width <= self.COLW - 0.1, f"method text too wide: {lines}"
+        left = x - (self.COLW - 0.1) / 2
+        return g.move_to([left + g.width / 2, self.TXT_TOP - g.height / 2, 0])
 
     def methods1d_slide(self):
         self.clear_all()
@@ -382,7 +428,7 @@ class FFTTalk(Slide):
         bf = Butterfly(8, x - L, x + L, TOP, GAP, color=SEQ, width=2.5)
         txt = self.method_text(x, [("Iterative radix-2 Cooley–Tukey:", FG),
                                    ("bit-reverse, then log₂N stages", FG),
-                                   ("of butterflies, one at a time on 1 core", FG),
+                                   ("of butterflies, in order, on 1 core", FG),
                                    ("→ the 1D baseline", MUTED)])
         self.play(FadeIn(titles[0]), FadeIn(bf.dots))
         for s in (1, 2, 3):
@@ -397,28 +443,41 @@ class FFTTalk(Slide):
                         for c in (1, 2)])
         leg = VGroup(*[VGroup(Line(ORIGIN, RIGHT * 0.35, color=THREADS[t], stroke_width=6), T(f"thread {t}", 20))
                        .arrange(RIGHT, buff=0.12) for t in (0, 1)]).arrange(RIGHT, buff=0.3).next_to(bf.dots, DOWN, buff=0.28)
+        bl = VGroup(*[T("barrier", 16, FG).next_to(b, UP, buff=0.04) for b in bars])
         txt = self.method_text(x, [("Split each stage's butterflies", FG),
                                    ("evenly across threads", FG),
-                                   ("Barrier after every stage", FG),
-                                   ("Also sync after bit reversal", MUTED)])
+                                   ("Barrier after bit reversal", FG),
+                                   ("and after every stage", FG),
+                                   ("→ log₂N barriers per FFT", MUTED)])
         self.play(FadeIn(titles[1]), FadeIn(bf.dots), *[Create(g) for s in bf.bfl for g in bf.bfl[s]])
         self.play(*[g.animate.set_stroke(THREADS[0 if b < 2 else 1], 3.5)
                     for s in bf.bfl for b, g in enumerate(bf.bfl[s])], FadeIn(leg))
-        self.play(Create(bars), FadeIn(txt))
+        self.play(Create(bars), FadeIn(bl), FadeIn(txt))
         self.next_slide()
 
-        # CUDA: one kernel per stage, with one thread per butterfly
+        # CUDA: one thread per butterfly, grouped into blocks; one launch per stage
         x = self.COLS[2]
-        bf = Butterfly(8, x - L, x + L, TOP, GAP, color=GPU, width=2.2)
-        labels = VGroup(*[T(f"stage {s}", 18, GPU).move_to([
+        bf = Butterfly(8, x - L, x + L, TOP, GAP, color=GPU, width=2.5)
+        BLOCKS = ["#7FB3C4", "#1F4E5F"]       # light / dark Innovation Blue
+        labels = VGroup(*[T(f"launch {s + 1}", 16, GPU).move_to([
             (bf.xs[s - 1] + bf.xs[s]) / 2, TOP + 0.28, 0]) for s in bf.bfl])
-        txt = self.method_text(x, [("Separate bit-reversal kernel", FG),
-                                   ("1 kernel per stage", FG),
-                                   ("1 GPU thread per butterfly", FG),
-                                   ("Kernel order synchronizes blocks", MUTED)])
-        self.play(FadeIn(titles[2]), FadeIn(bf.dots))
+        brv = T("launch 1:\nbit-reverse", 16, GPU, line_spacing=0.8).next_to(bf.dots, LEFT, buff=0.08)
+        gaps = VGroup(*[DashedLine(bf.p(c, 0) + UP * 0.2, bf.p(c, 7) + DOWN * 0.05, color=FG, dash_length=0.08)
+                        for c in (0, 1, 2)])
+        leg = VGroup(*[VGroup(Line(ORIGIN, RIGHT * 0.35, color=BLOCKS[k], stroke_width=6), T(f"block {k}", 20))
+                       .arrange(RIGHT, buff=0.12) for k in (0, 1)]).arrange(RIGHT, buff=0.3).next_to(bf.dots, DOWN, buff=0.28)
+        txt = self.method_text(x, [("1 GPU thread per butterfly,", FG),
+                                   ("threads grouped into blocks", FG),
+                                   ("Blocks can't sync with each", FG),
+                                   ("other: 1 launch per stage", FG),
+                                   ("→ log₂N + 1 launches,", MUTED),
+                                   ("all through global memory", MUTED)])
+        self.play(FadeIn(titles[2]), FadeIn(bf.dots), FadeIn(brv), FadeIn(leg))
         for s in bf.bfl:
-            self.play(FadeIn(labels[s - 1]), *[Create(g) for g in bf.bfl[s]], run_time=0.45)
+            for b, g in enumerate(bf.bfl[s]):
+                g.set_stroke(BLOCKS[0 if b < 2 else 1], 3.5)
+            self.play(Create(gaps[s - 1]), FadeIn(labels[s - 1]),
+                      *[Create(g) for g in bf.bfl[s]], run_time=0.5)
         self.play(FadeIn(txt))
         self.next_slide()
 
@@ -434,8 +493,8 @@ class FFTTalk(Slide):
         # Sequential: row by row, then column by column through a buffer
         x = self.COLS[0]
         g, cells = grid(n, side, np.array([x, CY, 0]))
-        txt = self.method_text(x, [("FFT every row, then every column", FG),
-                                   ("Columns are far apart in memory,", FG),
+        txt = self.method_text(x, [("FFT all rows, then all columns", FG),
+                                   ("Column values are far apart,", FG),
                                    ("so each is copied to a buffer", FG),
                                    ("→ the 2D baseline", MUTED)])
         self.play(FadeIn(titles[0]), FadeIn(g))
@@ -455,12 +514,18 @@ class FFTTalk(Slide):
         leg = VGroup(*[VGroup(Square(0.2, fill_color=THREADS[t], fill_opacity=1, stroke_width=0), T(f"thread {t}", 20))
                        .arrange(RIGHT, buff=0.1) for t in range(3)]).arrange(RIGHT, buff=0.22).next_to(g, DOWN, buff=0.15)
         txt = self.method_text(x, [("Threads take whole rows,", FG),
-                                   ("then whole columns", FG),
-                                   ("Each thread has its own buffer", FG),
-                                   ("Barrier between the two passes", MUTED)])
+                                   ("1 barrier, then whole columns", FG),
+                                   ("Each thread has its own", FG),
+                                   ("column buffer", FG),
+                                   ("→ 1 barrier instead of log₂N", MUTED)])
+        phase = T("rows", 20, MUTED).next_to(leg, DOWN, buff=0.12)
         self.play(FadeIn(titles[1]), FadeIn(g), FadeIn(leg))
-        self.play(*[cells[(r, c)].animate.set_fill(THREADS[r // 2]) for r in range(n) for c in range(n)])
-        self.play(*[cells[(r, c)].animate.set_fill(THREADS[c // 2]) for r in range(n) for c in range(n)])
+        self.play(FadeIn(phase), *[cells[(r, c)].animate.set_fill(THREADS[r // 2]) for r in range(n) for c in range(n)])
+        bar = SurroundingRectangle(g, color=FG, buff=0.06, stroke_width=3)
+        self.play(Transform(phase, T("barrier", 20, FG, weight=BOLD).move_to(phase)),
+                  ShowPassingFlash(bar, time_width=0.6), run_time=0.6)
+        self.play(Transform(phase, T("columns", 20, MUTED).move_to(phase)),
+                  *[cells[(r, c)].animate.set_fill(THREADS[c // 2]) for r in range(n) for c in range(n)])
         self.play(FadeIn(txt))
         self.next_slide()
 
@@ -495,16 +560,15 @@ class FFTTalk(Slide):
     # --------------------------------------------------- how we measure
     def method_slide(self):
         self.clear_all()
-        h = header("How we measure and show results", "METHOD")
+        h = header("How we measure", "METHOD")
         self.play(FadeIn(h))
 
         def card(title, body, color):
             t = T(title, 28, color, weight=BOLD)
-            b = VGroup(*[T(line, 24) for line in body]).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
-            content = VGroup(t, b).arrange(DOWN, aligned_edge=LEFT, buff=0.22)
+            content = stack([t] + [T(line, 24) for line in body], pitch(24), gaps={1: 0.12})
             box = RoundedRectangle(width=4.1, height=2.45, corner_radius=0.12,
                                    stroke_color=color, stroke_width=2.5)
-            content.move_to(box)
+            content.move_to(box.get_corner(UL) + np.array([0.25 + content.width / 2, -0.3 - content.height / 2, 0]))
             return VGroup(box, content)
 
         cards = VGroup(
@@ -557,7 +621,7 @@ class FFTTalk(Slide):
             legend.add(legend_entry(label, col, dashed, pending=not sp))
             if sp:
                 lines.append(plot(ax, ymap, sp, col, dashed))
-        legend.arrange(DOWN, aligned_edge=LEFT, buff=0.18)
+        stack(list(legend), pitch(24) + 0.12)
         right_col(legend, top=2.4, left=2.0, width=4.6)
         self.play(Create(ax), FadeIn(deco), FadeIn(even), FadeIn(legend))
         if not base:
@@ -568,12 +632,12 @@ class FFTTalk(Slide):
 
     def note(self, parts, anchor, gap=0.4):
         """parts: list of (text, colour). First line is the coloured lead."""
-        g = VGroup(*[T(s, 24, c) for s, c in parts]).arrange(DOWN, aligned_edge=LEFT, buff=0.07)
+        g = stack([T(s, 24, c) for s, c in parts], pitch(24))
         return fit(g, 4.6).next_to(anchor, DOWN, buff=gap, aligned_edge=LEFT)
 
     def compare1d_slide(self):
         self.clear_all()
-        h = header("1D compared: speedup as the problem grows", "1D", color=OMP)
+        h = header("1D compared: speedup vs. size", "1D", color=OMP)
         self.play(FadeIn(h))
         ax, ymap, lines, legend = self.speedup_chart(S1["seq"], [
             ("OpenMP 1D", S1["omp"], OMP, False),
@@ -601,13 +665,13 @@ class FFTTalk(Slide):
             top = max(ce)
             a3 = self.note([(f"GPU at {pow2(int(np.log2(top)))}: {ce[top]:.1f}× end-to-end,", GPU),
                             (f"{ck[top]:.0f}× compute only", GPU),
-                            ("kernel-only excludes transfer and host overhead", FG)], a2)
+                            ("the gap is copies and host overhead", FG)], a2)
             self.play(FadeIn(a3))
             self.next_slide()
 
     def compare2d_slide(self):
         self.clear_all()
-        h = header("2D compared · Q2: GPU vs CPU performance", "2D", color=GPU)
+        h = header("2D compared · Q2: GPU vs. CPU", "2D", color=GPU)
         self.play(FadeIn(h))
         ax, ymap, lines, legend = self.speedup_chart(S2["seq"], [
             ("OpenMP 2D", S2["omp"], OMP, False),
@@ -620,7 +684,7 @@ class FFTTalk(Slide):
         so, ce, ck = (speedups(S2["seq"], S2[k]) for k in ("omp", "cuda", "cudak"))
         if so and ce:
             lo, top = min(so), max(ce)
-            b1 = self.note([(f"OpenMP 2D: {so[lo]:.1f}× already at 1K values", OMP),
+            b1 = self.note([(f"OpenMP 2D: {so[lo]:.1f}× at 1K values", OMP),
                             (f"up to {max(so.values()):.0f}×: whole rows and columns", FG)], legend, 0.45)
             win = min(e for e, v in ce.items() if v > 1)
             b2 = self.note([(f"GPU beats serial from {pow2(int(np.log2(win)))} values", GPU),
@@ -670,7 +734,7 @@ class FFTTalk(Slide):
         if not SCALE:
             return
         self.clear_all()
-        h = header("Q1 · How does the CPU scale with cores?", "ALL SIX", color=OMP)
+        h = header("Q1 · CPU scaling with cores", "ALL SIX", color=OMP)
         self.play(FadeIn(h))
         ax = Axes(x_range=[0, 4, 1], y_range=[0, 16, 4], x_length=7.2, y_length=4.4,
                   axis_config={"color": MUTED, "include_tip": False, "stroke_width": 2.5})
@@ -687,6 +751,13 @@ class FFTTalk(Slide):
 
         shades = {1: ["#F4A6A6", "#E05252", "#990000"], 2: ["#A9B4DD", "#6A7BC4", "#2E3F86"]}
         ends = []
+        allpts = {(dim, e): [(np.log2(t), SCALE[(dim, e, 1)] / SCALE[(dim, e, t)]) for t in (1, 2, 4, 8, 16)]
+                  for (dim, e, t) in SCALE}
+        order = sorted(allpts, key=lambda k: allpts[k][-1][1])
+        laby, prev = {}, -1e9
+        for k in order:                                   # bottom-up, at least 0.3 apart on screen
+            y = max(ax.c2p(4, allpts[k][-1][1])[1], prev + 0.3)
+            laby[k] = prev = y
         for dim in (2, 1):
             sizes = sorted({k[1] for k in SCALE if k[0] == dim})
             for i, e in enumerate(sizes):
@@ -698,8 +769,7 @@ class FFTTalk(Slide):
                     line = DashedVMobject(line, num_dashes=30, dashed_ratio=0.6)
                 dots = VGroup(*[Dot(ax.c2p(x, y), radius=0.06, color=col) for x, y in pts])
                 lbl = T(f"{dim}D {pow2(int(np.log2(e)))}", 20, col).next_to(ax.c2p(4, pts[-1][1]), RIGHT, buff=0.12)
-                if dim == 2 and e == sizes[-1]:
-                    lbl.shift(UP * 0.13)
+                lbl.set_y(laby[(dim, e)])
                 ends.append((dim, e, pts[-1][1]))
                 self.play(Create(line), FadeIn(dots), FadeIn(lbl), run_time=0.6)
         self.next_slide()
@@ -715,9 +785,8 @@ class FFTTalk(Slide):
             T(f"1D: {largest1:.2f}× at same size", 26, RED, weight=BOLD),
             T("Barrier after each stage", 24),
             T("Lowest scaling at small sizes", 24),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
-        for m in notes[4:]:
-            m.shift(DOWN * 0.35)
+        )
+        stack(list(notes), pitch(24), gaps={4: 0.35})
         right_col(notes, top=1.2, left=2.9, width=3.9)
         self.play(FadeIn(notes))
         self.next_slide()
@@ -730,7 +799,7 @@ class FFTTalk(Slide):
 
     def compare_all_slide(self):
         self.clear_all()
-        h = header("All six · Q3: does the shape matter?", "ALL SIX", color=ACC)
+        h = header("All six · Q3: does shape matter?", "ALL SIX", color=ACC)
         self.play(FadeIn(h))
         ax, deco, ymap = make_axes(-2, 4, 1, [(0.01, "0.01 ms"), (1, "1 ms"), (100, "100 ms"), (10000, "10 s")],
                                    "values (N for 1D, n × n for 2D): lower is faster", log=True)
@@ -740,12 +809,12 @@ class FFTTalk(Slide):
             ("Sequential 2D", S2["seq"], SEQ, True), ("OpenMP 2D", S2["omp"], OMP, True),
             ("CUDA 2D", S2["cuda"], GPU, True),
         ]
-        legend = VGroup(*[legend_entry(l, c, dsh, pending=not d) for l, d, c, dsh in entries]
-                        ).arrange(DOWN, aligned_edge=LEFT, buff=0.14)
+        legend = stack([legend_entry(l, c, dsh, pending=not d) for l, d, c, dsh in entries], pitch(24) + 0.06)
         key = VGroup(T("solid = 1D, dashed = 2D", 22, MUTED),
                      T("GPU times include copies", 22, MUTED),
-                     T("same element count; different data layout", 22, MUTED)).arrange(DOWN, aligned_edge=LEFT, buff=0.06)
-        right_col(VGroup(legend, key).arrange(DOWN, aligned_edge=LEFT, buff=0.25), top=2.4, left=2.0, width=4.6)
+                     T("same element count, different layout", 22, MUTED))
+        stack(list(key), pitch(22))
+        right_col(VGroup(legend, key).arrange(DOWN, aligned_edge=LEFT, buff=0.3), top=2.4, left=2.0, width=4.6)
         self.play(Create(ax), FadeIn(deco), FadeIn(legend), FadeIn(key))
         for l, d, c, dsh in entries:
             if d:
@@ -758,13 +827,11 @@ class FFTTalk(Slide):
             largest = 2 ** 24
             omp_ratio = S1["omp"][largest] / S2["omp"][largest]
             cuda_ratio = S1["cuda"][largest] / S2["cuda"][largest]
-            f = self.note([
-                ("Shape changes the parallel performance", ACC),
-                (f"At 16.8M, OpenMP 2D is {omp_ratio:.2f}× faster", FG),
-                ("  (independent row/column FFTs)", MUTED),
-                (f"At 16.8M, CUDA 2D is {cuda_ratio:.2f}× faster", FG),
-                ("  (end-to-end, including transfers)", MUTED),
-            ], key, 0.35)
+            f = self.note([("At 16.8M, 2D beats 1D:", ACC),
+                           (f"OpenMP: {omp_ratio:.2f}× faster", FG),
+                           ("  (independent row/column FFTs)", MUTED),
+                           (f"CUDA: {cuda_ratio:.2f}× faster", FG),
+                           ("  (end to end, incl. transfers)", MUTED)], key, 0.35)
             self.play(FadeIn(f))
         self.next_slide()
 
@@ -782,15 +849,20 @@ class FFTTalk(Slide):
             s2 = SCALE[(2, e, 1)] / SCALE[(2, e, 16)]
             s1 = SCALE[(1, e, 1)] / SCALE[(1, e, 16)]
             q1 = f'At 16.8M: 1D {s1:.2f}×, 2D {s2:.2f}× scaling (1 to 16 threads)'
-        q2 = (f'At 16.8M: CUDA 2D {ce[max(ce)]:.2f}× end-to-end vs sequential; '
-              f'transfers and overhead matter') if ce else 'CUDA results unavailable'
+        q2 = (f'At 16.8M: CUDA 2D {ce[max(ce)]:.1f}× end to end vs sequential; '
+              f'copies dominate') if ce else 'CUDA results unavailable'
         q3 = (f"At 16.8M: OpenMP 2D {S1['omp'][max(S1['omp'])] / S2['omp'][max(S2['omp'])]:.2f}× "
               f"faster than OpenMP 1D") if o else "Shape comparison unavailable"
-        items = VGroup(
-            M(f'<span foreground="{OMP}"><b>Q1 CPU</b></span>   {q1}', 30),
-            M(f'<span foreground="{GPU}"><b>Q2 GPU</b></span>   {q2}', 30),
-            M(f'<span foreground="{ACC}"><b>Q3 Shape</b></span>   {q3}', 30),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.5).shift(UP * 0.7)
+        labs = [T("Q1 CPU", 28, OMP, weight=BOLD), T("Q2 GPU", 28, GPU, weight=BOLD),
+                T("Q3 Shape", 28, ACC, weight=BOLD)]
+        lw = max(l.width for l in labs) + 0.35
+        items = VGroup()
+        for i, (l, q) in enumerate(zip(labs, (q1, q2, q3))):
+            a = T(q, 28)
+            l.move_to([l.width / 2, -1.0 * i, 0])
+            a.move_to([lw + a.width / 2, -1.0 * i, 0])
+            items.add(VGroup(l, a))
+        items.move_to(UP * 1.4)
         fit(items, 13.0)
         self.play(LaggedStart(*[FadeIn(i, shift=RIGHT * 0.3) for i in items], lag_ratio=0.3))
         ans = VGroup(T("Parallelism pays off when the problem is big enough to hide the overhead,", 30, weight=BOLD),

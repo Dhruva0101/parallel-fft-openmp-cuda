@@ -41,10 +41,11 @@ Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic
 step is a butterfly. We reorder by bit-reversed index, then run log-N stages
 one after another: the baseline." **[click]**
 OpenMP: "Inside a stage, butterflies are independent, so we split them evenly
-across threads. There is a barrier after bit reversal and after every stage." **[click]**
+across threads. There is a barrier after bit reversal and after every stage: log-N
+barriers per FFT." **[click]**
 CUDA: "One kernel reorders the input, then we launch one kernel per stage
 with one GPU thread per butterfly. Each launch finishes across all blocks
-before the next stage starts." **[click]**
+before the next stage starts, and every stage goes through global memory." **[click]**
 
 **1D compared** *(1:15)*. "Speedup over sequential 1D as the problem grows."
 **[click]** "OpenMP at 1,000 values: 0.34×, slower: threads cost more than
@@ -60,7 +61,8 @@ Sequential: "Now an n-by-n grid: FFT every row, then every column,
 copying each column into a buffer because columns are far apart in memory."
 **[click]**
 OpenMP: "Threads take whole rows, wait at a barrier, then take whole
-columns. Each thread has its own column buffer." **[click]**
+columns. Each thread has its own column buffer. That's one barrier instead
+of log-N." **[click]**
 CUDA: "One block per row in shared memory; columns are slow on a GPU, so we
 transpose, reuse the row kernel, and transpose back." **[click]**
 
@@ -82,8 +84,9 @@ and 3 to 5× at smaller sizes. It has a barrier after each stage." **[click]**
 **All six**. "All six on one chart, lower is faster; same number of
 values, different data layout." **[click]** "Shape matters once you go
 parallel: at 16.8 million, OpenMP 2D is 1.4× faster than 1D, and up to 3.2× at
-smaller sizes. On the GPU, the 2D kernels are 9.6× faster, because short rows
-stay in shared memory." **[click]**
+smaller sizes. On the GPU, 2D is 1.9× faster end to end, including transfers;
+the kernels alone are 9.6× faster, because short rows stay in shared memory."
+**[click]**
 
 **What we found.** "To sum up: 1D scales 8× and 2D 14× on 16 cores, CUDA 2D
 is 90× end to end, and 2D beats 1D. So parallelism pays off when the problem
