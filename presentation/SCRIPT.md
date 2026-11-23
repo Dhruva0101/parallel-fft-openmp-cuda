@@ -7,38 +7,39 @@ Suggested split: each person explains what they wrote.
 **Dhruva**: Why, Method, Sequential/OpenMP 1D, 1D compared, CUDA 2D, 2D compared.
 **Om**: CUDA 1D, Sequential/OpenMP 2D, all six / Q3. Either: wrap-up.
 
-> CPU 2D and CUDA 1D numbers currently come from stand-in code. Re-run them
-> with Om's implementation before presenting, or say so in the talk.
-
 ## WHY (0:00 – 0:30)
 
 **Title.** "We're Dhruva and Om. We built six parallel versions of the
 Cooley–Tukey Fast Fourier Transform, on the CPU with OpenMP and on the GPU with CUDA."
 **[click]**
 
-**Why the FFT.** "An FFT turns a signal into its frequency components. It's used everywhere, from audio to MRI to deep
-learning. Cooley–Tukey cuts the work from N squared to N log N. It's also a good test for parallel hardware: it has two kinds of
-parallelism, it's limited by memory rather than math, and every answer can
-be checked exactly." **[click]**
+**Why the FFT.** "An FFT turns a signal into its frequency components. It's
+used everywhere, from audio to MRI to deep learning. Cooley–Tukey cuts the
+work from N squared to N log N. It's also a good test for parallel hardware:
+it has two kinds of parallelism, it's limited by memory rather than math, and
+every answer can be checked." **[click]**
 
 **Questions.** "We ask: how well does the CPU scale with more cores, when does
 the GPU win, and does 1D versus 2D shape matter?" **[click]**
 
 ## METHOD (0:30 – 0:45)
 
-**Fair test.** "All six get the same input, flags and timer, and every result
-is checked against an exact DFT. We ran on NC State's ARC cluster." **[click]**
+**Fair test.** "All six get the same seeded input and the same timer. Small
+sizes are checked against a direct DFT, and every size up to 16.8 million
+values passes an inverse round trip. We ran on NC State's ARC cluster."
+**[click]**
 
-**Reading the charts.** "Speedup is sequential time over parallel time. The
-GPU gets two numbers: compute only, and including copies. 1D and 2D use the
-same sizes, so all six line up." **[click]**
+**Reading the charts.** "Speedup is sequential time over parallel time.
+OpenMP uses 16 threads, one per core; the scaling test varies that from 1
+to 16. The GPU gets two numbers: kernel only, and end to end with transfers.
+1D and 2D use the same sizes, so all six line up." **[click]**
 
 ## 1D (0:45 – 1:45)
 
 **1D methods** *(3 clicks, one per column)*.
-Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic step is a butterfly. We reorder by
-bit-reversed index, then run log-N stages one after another: the baseline."
-**[click]**
+Sequential: "One long FFT, using iterative radix-2 Cooley–Tukey. The basic
+step is a butterfly. We reorder by bit-reversed index, then run log-N stages
+one after another: the baseline." **[click]**
 OpenMP: "Inside a stage, butterflies are independent, so we split them evenly
 across threads, with a barrier after every stage." **[click]**
 CUDA *(Om)*: "One GPU thread per butterfly. Blocks can only sync internally,
@@ -46,10 +47,10 @@ so the first 11 stages run fused in shared memory, and every later stage gets
 its own launch, which acts as a grid-wide barrier." **[click]**
 
 **1D compared** *(1:15)*. "Speedup over one core as the problem grows."
-**[click]** "OpenMP at 1,000 values: 0.45×, slower: threads cost more than
-the work." **[click]** "At 4 million: 14×. Big problems hide the overhead."
-**[click]** "The GPU: 91× including copies, 143× compute only; it dips where
-the data outgrows its L2 cache." **[click]**
+**[click]** "OpenMP at 1,000 values: 0.34×, slower: threads cost more than
+the work." **[click]** "At 4 million: 8×. Big problems hide the overhead."
+**[click]** "The GPU at 16.8 million: 38× end to end, 72× kernel only. The
+kernel-only number leaves out transfers and host overhead." **[click]**
 
 ## 2D (1:45 – 2:55)
 
@@ -63,44 +64,49 @@ CUDA: "One block per row in shared memory; columns are slow on a GPU, so we
 transpose, reuse the row kernel, and transpose back." **[click]**
 
 **2D compared** *(2:20)*. "Speedup over one core." **[click]** "OpenMP 2D is
-already faster at 1,000 values and reaches 14×. The GPU reaches 117× including
-copies, 600× compute only." **[click]** "The gap between those two is copying:
-80 to 90 percent of GPU time." **[click]** "5 ms of compute, 21 of copying."
-**[click]**
+already faster at 1,000 values and reaches 16×. The GPU beats the sequential
+code from 4,000 values, and at 16.8 million reaches 90× end to end, 875×
+kernel only." **[click]** "The gap is everything outside the kernels: 90 to
+95 percent of GPU time." **[click]** "5 ms in kernels, 42 ms in transfers and
+overhead." **[click]**
 
 ## ALL SIX (2:55 – 4:00)
 
 **Q1 scaling** *(2:55)*. "Now fix the size and add cores. Each line is
 speedup over the same code on one core; the grey curve is ideal." **[click]**
-"2D sits almost on the ideal: 15.7× on 16 cores, because with one barrier
-more cores just means more rows at once. 1D only reaches 4 to 8×: its
-log-N barriers cost more as cores are added, worst when the problem is
-small." **[click]**
+"2D at 16.8 million: 14.1× on 16 cores, 88 percent of ideal, because with one
+barrier more cores just means more rows at once. 1D at the same size only
+reaches 8×, and 3 to 5× at smaller sizes: its log-N barriers cost more as
+cores are added." **[click]**
 
-**All six** *(Om)*. "All six on one chart, lower is faster; same values means
-the same arithmetic." **[click]** "Shape matters once you go parallel: OpenMP
-2D is 1.3 to 2.8× faster than 1D, because it needs one barrier instead of
-log-N. On the GPU, 2D compute is up to 7× faster." **[click]**
+**All six** *(Om)*. "All six on one chart, lower is faster; same number of
+values, different data layout." **[click]** "Shape matters once you go
+parallel: at 16.8 million, OpenMP 2D is 1.4× faster than 1D, and up to 3× at
+smaller sizes. On the GPU, the 2D kernels are 9.6× faster, because short rows
+stay in shared memory." **[click]**
 
-**What we found.** "So parallelism pays off when the problem is big enough to
-hide the overhead, the work needs few barriers, and the data stays where the
-compute is." **[click]** "Thank you, questions?"
+**What we found.** "To sum up: 1D scales 8× and 2D 14× on 16 cores, CUDA 2D
+is 90× end to end, and 2D beats 1D. So parallelism pays off when the problem
+is big enough to hide the overhead, the work needs few barriers, and the data
+stays where the compute is." **[click]** "Thank you, questions?"
 
 ---
 
 ## Likely questions (30 s)
 
 - **Why measure scaling against 1 core of the same code?** That isolates
-  what extra cores add. On ARC at 2²⁴, one-thread OpenMP 1D is already 1.5×
-  faster than the sequential code (not on a laptop); we haven't found why
-  yet, so we keep that out of the scaling numbers.
-- **Why is sequential 2D slower than 1D at small sizes but faster at large?**
-  Small: gathering strided columns costs extra. Large: 2D works on short rows
-  that fit in cache, while 1D's late stages jump across the whole array.
+  what extra cores add. At 2²⁴ on ARC, one-thread OpenMP 1D is about 1.1×
+  faster than the sequential code (3.07 s vs 3.34 s), so the two baselines
+  are close but not identical.
+- **Why is sequential 2D slower than sequential 1D?** Same number of
+  butterflies, but 2D also gathers every column into a buffer and scatters it
+  back: 1.1–1.4× slower at every size.
 - **Why is CUDA 2D compute faster than CUDA 1D?** 2D keeps each row in shared
   memory for all its stages; 1D's later stages each read and write global
   memory once.
 - **Is comparing 1D and 2D fair?** Same number of values = same number of
-  butterflies (N/2 · log₂N); only the parallel structure differs.
-- **Would pinned memory fix the copies?** Not much: we already move data at
-  ~13 GB/s, close to the 4060 Ti's PCIe 4.0 ×8 limit.
+  butterflies (N/2 · log₂N); only the data layout and parallel structure
+  differ.
+- **Would pinned memory reduce the transfer time?** Probably, partly: at 16.8 M
+  values we move 268 MB in about 42 ms, roughly 6 GB/s from pageable memory,
+  well below what PCIe 4.0 ×8 allows.
